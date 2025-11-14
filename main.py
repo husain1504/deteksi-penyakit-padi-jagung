@@ -34,10 +34,10 @@ def load_model():
     # Pastikan nama file sesuai dengan yang didownload dari Colab
     # Anda mungkin perlu mengganti 'model_padi_komplit.h5' jika namanya berbeda
     try:
-        model = tf.keras.models.load_model('model_padi_komplit.h5')
+        model = tf.keras.models.load_model('model_padi_FINAL.h5')
         return model
     except Exception as e:
-        st.error(f"Error: Tidak dapat memuat model. Pastikan file 'model_padi_komplit.h5' ada di folder yang sama.\nDetail: {e}")
+        st.error(f"Error: Tidak dapat memuat model. Pastikan file 'model_padi_FINAL.h5' ada di folder yang sama.\nDetail: {e}")
         return None
 
 with st.spinner('Sedang memuat model AI...'):
