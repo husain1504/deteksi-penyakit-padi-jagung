@@ -7,22 +7,19 @@ from tensorflow.keras import layers
 
 # --- IMPORT DATABASE PENYAKIT ---
 try:
-    # Pastikan file 'kamus_penyakit.py' ada di folder yang sama
+    # Pastikan file 'kamus_penyakit.py' (versi Padi+Jagung) ada di folder yang sama
     from kamus_penyakit import solusi_petani
 except ImportError:
     st.error("FATAL: File 'kamus_penyakit.py' tidak ditemukan.")
-    # Fallback data jika file tidak ada, agar aplikasi tidak crash total
-    solusi_petani = {
-        'normal': {'nama': 'Tanaman Sehat', 'status': 'Aman', 'style': 'safe', 'icon': '✅', 'saran': 'File kamus_penyakit.py hilang.', 'deskripsi': '', 'gejala': '', 'penanganan': '', 'pencegahan': ''}
-    }
+    solusi_petani = {} # Fallback
 
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN
 # ==========================================
 st.set_page_config(
-    page_title="Dokter Padi AI",
-    page_icon="🌾",
+    page_title="Dokter Tanaman AI",
+    page_icon="🧑‍🌾",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -63,22 +60,21 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. LOGIKA MODEL (INI BAGIAN YANG BENAR)
+# 3. LOGIKA MODEL (UPGRADE MULTI-TANAMAN)
 # ==========================================
 
 # FUNGSI UNTUK MEMBUAT "RANGKA" MODEL
 def build_model(num_classes):
     """Membangun arsitektur MobileNetV2 yang sama dengan saat training."""
     base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
-    base_model.trainable = False # Bekukan base model
+    base_model.trainable = False
     
-    # Tambahkan layer custom di atasnya
     model = tf.keras.Sequential([
         base_model,
         layers.GlobalAveragePooling2D(),
         layers.Dropout(0.3),
         layers.Dense(256, activation='relu'),
-        layers.Dense(num_classes, activation='softmax') # num_classes = 8
+        layers.Dense(num_classes, activation='softmax') # Otomatis sesuai NUM_CLASSES
     ])
     return model
 
@@ -86,35 +82,45 @@ def build_model(num_classes):
 @st.cache_resource
 def load_model_with_weights():
     """Membuat rangka dan mengisinya dengan bobot."""
-    # 1. Tentukan jumlah kelas (sesuai folder dataset Anda)
-    NUM_CLASSES = 8 
+    # 1. Tentukan jumlah kelas (SESUAIKAN DENGAN JUMLAH FOLDER BARU ANDA)
+    # 8 Padi + 4 Jagung = 12 Kelas
+    NUM_CLASSES = 12 
     
     # 2. Buat "Rangka" Kosong
     model = build_model(num_classes=NUM_CLASSES)
     
-    # 3. Tentukan nama file bobot
-    weights_file = 'model_bobot_saja.weights.h5'
+    # 3. Tentukan nama file bobot BARU
+    weights_file = 'model_bobot_padi_jagung.weights.h5' # <-- NAMA FILE BARU
     
     # 4. Isi "Rangka" dengan "Ilmu" (Bobot)
     try:
-        model.load_weights(weights_file) # INI FUNGSI YANG BENAR
+        model.load_weights(weights_file) 
         return model
     except Exception as e:
         st.error(f"Error: Tidak dapat memuat model. Pastikan file '{weights_file}' ada di folder yang sama.\nDetail: {e}")
         return None
 
 # --- Panggil fungsi ---
-with st.spinner('Sedang memuat model AI...'):
+with st.spinner('Sedang memuat model AI (Padi & Jagung)...'):
     model = load_model_with_weights()
 
-# Nama kelas (HARUS URUT SESUAI TRAINING)
+# Nama kelas (HARUS URUT ABJAD SESUAI NAMA FOLDER BARU)
 class_names = [
-    'bacterial_blight', 'brown_spot', 'defisiensi_k', 
-    'defisiensi_n', 'defisiensi_p', 'leaf_blast', 
-    'leaf_scald', 'normal'
+    'jagung_blight',
+    'jagung_common_rust',
+    'jagung_gray_leaf_spot',
+    'jagung_healthy',
+    'padi_bacterial_blight', 
+    'padi_brown_spot', 
+    'padi_defisiensi_k', 
+    'padi_defisiensi_n', 
+    'padi_defisiensi_p', 
+    'padi_leaf_blast', 
+    'padi_leaf_scald', 
+    'padi_normal'
 ]
 
-# Fungsi prediksi (tetap sama)
+# Fungsi prediksi (tetap sama, tidak perlu diubah)
 def import_and_predict(image_data, model):
     size = (224, 224)
     image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
@@ -123,7 +129,6 @@ def import_and_predict(image_data, model):
     data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
     data[0] = normalized_image_array
     
-    # Tambahkan try-except di sini untuk keamanan
     try:
         prediction = model.predict(data)
         index = np.argmax(prediction)
@@ -138,19 +143,19 @@ def import_and_predict(image_data, model):
 # ==========================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3022/3022999.png", width=80)
-    st.title("Dokter Padi")
-    st.caption("Versi 1.0 - Petani Cerdas")
+    st.title("Dokter Tanaman")
+    st.caption("Versi 2.0 - Petani Cerdas") # Saya pertahankan nama Petani Cerdas Anda
     st.markdown("---")
-    st.info("Aplikasi ini mendukung Dark Mode otomatis mengikuti pengaturan HP/Laptop Anda.")
-    st.markdown("© 2025 Petani Cerdas")
+    st.info("Aplikasi ini dapat mendeteksi penyakit pada tanaman Padi dan Jagung.")
+    st.markdown("© 2025 Petani Cerdas") # Saya pertahankan nama Petani Cerdas Anda
 
 # ==========================================
 # 5. UI UTAMA
 # ==========================================
 st.markdown("""
 <div class="main-header">
-    <h1>🌾 Dokter Padi Cerdas</h1>
-    <p>Sistem Pakar Deteksi Penyakit & Hara Padi Berbasis AI</p>
+    <h1>🧑‍🌾 Dokter Tanaman Cerdas</h1>
+    <p>Sistem Pakar Deteksi Penyakit Padi & Jagung Berbasis AI</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -161,7 +166,7 @@ if model is not None:
     with col1:
         st.markdown("### 📸 Foto Tanaman")
         st.markdown('<div class="info-card">', unsafe_allow_html=True)
-        file = st.file_uploader("Upload foto daun disini", type=["jpg", "png", "jpeg"])
+        file = st.file_uploader("Upload foto daun (Padi / Jagung)", type=["jpg", "png", "jpeg"])
         st.markdown('</div>', unsafe_allow_html=True)
 
         if file is not None:
@@ -179,9 +184,13 @@ if model is not None:
             with st.spinner("Sedang Menganalisis..."):
                 idx, conf = import_and_predict(image, model)
                 
-                # Cek jika prediksi berhasil
-                if idx is not None:
-                    # Ambil info dari database (kamus_penyakit.py)
+                # ==========================================================
+                # --- FITUR FILTER BARU (PENOLAK TANAMAN LAIN) ---
+                # ==========================================================
+                MIN_CONFIDENCE = 0.70 # Ambang batas 70%
+                
+                if idx is not None and conf >= MIN_CONFIDENCE:
+                    # JIKA YAKIN (DI ATAS 70%), TAMPILKAN HASIL
                     res = class_names[idx]
                     info = solusi_petani.get(res)
                     
@@ -217,6 +226,18 @@ if model is not None:
                     with tab3:
                         st.markdown("#### Cara Mencegah:")
                         st.markdown(info['pencegahan'])
+                        
+                elif idx is not None and conf < MIN_CONFIDENCE:
+                    # JIKA TIDAK YAKIN (DI BAWAH 70%), TOLAK GAMBAR
+                    st.error(f"""
+                    **Gambar Tidak Dikenali (Keyakinan: {conf*100:.0f}%)**
+                    
+                    Model AI kami tidak dapat mengenali gambar ini sebagai daun Padi atau Jagung.
+                    
+                    **Mohon unggah foto yang jelas dan pastikan itu adalah daun Padi atau Jagung.**
+                    """)
+                    st.info("Jika Anda yakin ini adalah Padi/Jagung, coba foto ulang dengan pencahayaan lebih baik.")
+                    
                 else:
                     st.error("Terjadi masalah saat melakukan prediksi.")
         else:
@@ -229,4 +250,4 @@ if model is not None:
 else:
     # Tampilan jika model GAGAL dimuat
     st.warning("Model AI belum siap. Harap periksa error di atas.")
-    st.error("Jika Anda adalah developer, pastikan 'model_bobot_saja.weights.h5' ada di GitHub dan `main.py` sudah menggunakan `load_weights()`.")
+    st.error("Jika Anda adalah developer, pastikan 'model_bobot_padi_jagung.weights.h5' ada di GitHub.")
