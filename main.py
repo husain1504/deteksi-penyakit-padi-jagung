@@ -7,25 +7,23 @@ from tensorflow.keras import layers
 
 # --- IMPORT DATABASE PENYAKIT ---
 try:
-    # Pastikan file 'kamus_penyakit.py' (versi Padi+Jagung) ada di folder yang sama
     from kamus_penyakit import solusi_petani
 except ImportError:
     st.error("FATAL: File 'kamus_penyakit.py' tidak ditemukan.")
-    solusi_petani = {} # Fallback
-
+    solusi_petani = {}
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN
 # ==========================================
 st.set_page_config(
     page_title="Dokter Tanaman AI",
-    page_icon="🧑‍🌾",
+    page_icon="🌾",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 2. CSS ADAPTIF (DARK & LIGHT MODE FRIENDLY)
+# 2. CSS ADAPTIF
 # ==========================================
 st.markdown("""
     <style>
@@ -60,106 +58,82 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. LOGIKA MODEL (UPGRADE MULTI-TANAMAN)
+# 3. LOGIKA MODEL
 # ==========================================
 
-# FUNGSI UNTUK MEMBUAT "RANGKA" MODEL
 def build_model(num_classes):
-    """Membangun arsitektur MobileNetV2 yang sama dengan saat training."""
     base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
     base_model.trainable = False
-    
     model = tf.keras.Sequential([
         base_model,
         layers.GlobalAveragePooling2D(),
         layers.Dropout(0.3),
         layers.Dense(256, activation='relu'),
-        layers.Dense(num_classes, activation='softmax') # Otomatis sesuai NUM_CLASSES
+        layers.Dense(num_classes, activation='softmax')
     ])
     return model
 
-# FUNGSI BARU UNTUK LOAD "BOBOT"
 @st.cache_resource
 def load_model_with_weights():
-    """Membuat rangka dan mengisinya dengan bobot."""
-    # 1. Tentukan jumlah kelas (SESUAIKAN DENGAN JUMLAH FOLDER BARU ANDA)
-    # 8 Padi + 4 Jagung = 12 Kelas
     NUM_CLASSES = 12 
-    
-    # 2. Buat "Rangka" Kosong
     model = build_model(num_classes=NUM_CLASSES)
+    weights_file = 'model_bobot_padi_jagung.weights.h5'
     
-    # 3. Tentukan nama file bobot BARU
-    weights_file = 'model_bobot_padi_jagung.weights.h5' # <-- NAMA FILE BARU
-    
-    # 4. Isi "Rangka" dengan "Ilmu" (Bobot)
     try:
         model.load_weights(weights_file) 
         return model
     except Exception as e:
-        st.error(f"Error: Tidak dapat memuat model. Pastikan file '{weights_file}' ada di folder yang sama.\nDetail: {e}")
+        st.error(f"Error: Tidak dapat memuat bobot model '{weights_file}'.\nDetail: {e}")
         return None
 
-# --- Panggil fungsi ---
-with st.spinner('Sedang memuat model AI (Padi & Jagung)...'):
-    model = load_model_with_weights()
+model = load_model_with_weights()
 
-# Nama kelas (HARUS URUT ABJAD SESUAI NAMA FOLDER BARU)
+# Pastikan urutan ini SESUAI ABJAD dengan nama folder dataset Anda
 class_names = [
-    'jagung_blight',
-    'jagung_common_rust',
-    'jagung_gray_leaf_spot',
-    'jagung_healthy',
-    'padi_bacterial_blight', 
-    'padi_brown_spot', 
-    'padi_defisiensi_k', 
-    'padi_defisiensi_n', 
-    'padi_defisiensi_p', 
-    'padi_leaf_blast', 
-    'padi_leaf_scald', 
-    'padi_normal'
+    'jagung_blight', 'jagung_common_rust', 'jagung_gray_leaf_spot', 'jagung_healthy',
+    'padi_bacterial_blight', 'padi_brown_spot', 'padi_defisiensi_k', 'padi_defisiensi_n', 
+    'padi_defisiensi_p', 'padi_leaf_blast', 'padi_leaf_scald', 'padi_normal'
 ]
 
-# Fungsi prediksi (DIPERBAIKI agar tidak error dimensi array)
+# --- FUNGSI PREDIKSI YANG SUDAH DIPERBAIKI (ANTI-ERROR) ---
 def import_and_predict(image_data, model):
-    # 1. Pastikan RGB
-    image_data = image_data.convert('RGB')
-    
-    # 2. Resize
-    size = (224, 224)
-    image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
-    
-    # 3. Convert to Array & Normalize
-    img_array = np.asarray(image)
-    normalized_image_array = (img_array.astype(np.float32) / 255.0)
-    
-    # 4. Expand Dimensions (Membuat batch: (1, 224, 224, 3))
-    # Ini menggantikan cara manual 'data[0] =' yang sering error
-    data = np.expand_dims(normalized_image_array, axis=0)
-    
     try:
+        # 1. Perbaiki Orientasi (PENTING untuk foto HP)
+        image_data = ImageOps.exif_transpose(image_data)
+        
+        # 2. Pastikan Format RGB (Mencegah error RGBA/PNG)
+        image_data = image_data.convert('RGB')
+        
+        # 3. Resize & Preprocess
+        size = (224, 224)
+        image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
+        img_array = np.asarray(image)
+        normalized_image_array = (img_array.astype(np.float32) / 255.0)
+        
+        # 4. Buat Batch
+        data = np.expand_dims(normalized_image_array, axis=0)
+        
+        # 5. Prediksi
         prediction = model.predict(data)
         index = np.argmax(prediction)
         confidence = np.max(prediction)
         return index, confidence
+        
     except Exception as e:
-        st.error(f"Error saat prediksi: {e}")
+        st.error(f"Terjadi kesalahan saat memproses gambar: {e}")
         return None, 0
 
 # ==========================================
-# 4. UI SIDEBAR
+# 4. TAMPILAN APLIKASI
 # ==========================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3022/3022999.png", width=80)
     st.title("Dokter Tanaman")
-    st.caption("Versi 2.0 - Petani Cerdas")
+    st.caption("v2.1 - Fix Orientasi")
     st.markdown("---")
-    st.info("Aplikasi ini dapat mendeteksi penyakit pada tanaman Padi dan Jagung.")
-    st.markdown("© 2025 Petani Cerdas")
+    st.info("Aplikasi deteksi penyakit Padi & Jagung.")
+    st.markdown("© 2025 Project Skripsi")
 
-# ==========================================
-# 5. UI UTAMA
-# ==========================================
 st.markdown("""
 <div class="main-header">
     <h1>🧑‍🌾 Dokter Tanaman Cerdas</h1>
@@ -167,7 +141,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Cek apakah model berhasil di-load
 if model is not None:
     col1, col2 = st.columns([1, 1.5], gap="large")
 
@@ -183,7 +156,7 @@ if model is not None:
             analyze = True
         else:
             analyze = False
-            st.info("Silakan upload foto untuk memulai analisis.")
+            st.info("Silakan upload foto untuk memulai.")
 
     with col2:
         st.markdown("### 📊 Hasil Diagnosa")
@@ -192,17 +165,17 @@ if model is not None:
             with st.spinner("Sedang Menganalisis..."):
                 idx, conf = import_and_predict(image, model)
                 
-                # ==========================================================
-                # --- FITUR FILTER BARU (PENOLAK TANAMAN LAIN) ---
-                # ==========================================================
-                # Ambang batas keyakinan. Jika di bawah ini, anggap bukan Padi/Jagung
-                MIN_CONFIDENCE = 0.70 
+                # --- FILTER KEYAKINAN (THRESHOLD) ---
+                MIN_CONFIDENCE = 0.60 # Diturunkan jadi 60% agar lebih toleran
                 
                 if idx is not None and conf >= MIN_CONFIDENCE:
-                    # JIKA YAKIN (DI ATAS 70%), TAMPILKAN HASIL
                     res = class_names[idx]
                     info = solusi_petani.get(res)
                     
+                    # Fallback jika data penyakit belum ada di kamus
+                    if not info:
+                        info = {'nama': res, 'status': 'Terdeteksi', 'style': 'warning', 'icon': '⚠️', 'deskripsi': '-', 'gejala': '-', 'penanganan': '-', 'pencegahan': '-'}
+
                     css_class = f"status-{info['style']}"
                     
                     st.markdown(f"""
@@ -219,48 +192,34 @@ if model is not None:
                     tab1, tab2, tab3 = st.tabs(["📖 Penjelasan", "💊 Solusi & Obat", "🛡️ Pencegahan"])
                     
                     with tab1:
-                        st.markdown("#### Apa itu penyakit ini?")
-                        st.info(info['deskripsi'])
-                        st.markdown("#### Gejala Khas:")
-                        st.markdown(info['gejala'])
-                        
+                        st.info(info.get('deskripsi', '-'))
+                        st.markdown("**Gejala Khas:**")
+                        st.markdown(info.get('gejala', '-'))
                     with tab2:
-                        st.markdown("#### Langkah Pengobatan:")
                         if info['style'] == 'safe':
-                            st.success(info['penanganan'])
+                            st.success(info.get('penanganan', '-'))
                         else:
-                            st.warning(info['penanganan'])
-                            st.caption("⚠️ *Catatan: Gunakan pestisida sesuai dosis.*")
-                            
+                            st.warning(info.get('penanganan', '-'))
                     with tab3:
-                        st.markdown("#### Cara Mencegah:")
-                        st.markdown(info['pencegahan'])
+                        st.markdown(info.get('pencegahan', '-'))
                         
                 elif idx is not None and conf < MIN_CONFIDENCE:
-                    # JIKA TIDAK YAKIN (DI BAWAH 70%), TOLAK GAMBAR
                     st.error(f"""
-                    ### ⚠️ Gambar Tidak Dikenali
-                    
-                    **Tingkat Keyakinan AI: {conf*100:.0f}% (Terlalu Rendah)**
-                    
-                    Sistem kami mendeteksi bahwa gambar ini kemungkinan besar **bukan daun Padi atau Jagung**, atau kualitas gambarnya kurang jelas.
-                    
-                    **Mohon unggah ulang dengan ketentuan:**
-                    1. Pastikan objek adalah **Daun Padi** atau **Daun Jagung**.
-                    2. Pastikan gambar fokus dan pencahayaan cukup.
-                    3. Hindari latar belakang yang terlalu ramai.
+                    ### ⚠️ Gambar Tidak Dikenali ({conf*100:.0f}%)
+                    Sistem kurang yakin dengan gambar ini.
+                    **Saran:**
+                    1. Pastikan foto fokus pada **satu lembar daun**.
+                    2. Pastikan pencahayaan cukup.
+                    3. Coba putar posisi foto.
                     """)
-                    
                 else:
-                    st.error("Terjadi masalah saat melakukan prediksi.")
+                    st.error("Gagal memproses gambar.")
         else:
-            # Placeholder saat kosong
             st.markdown("""
             <div class="info-card" style="text-align: center; opacity: 0.5; padding: 40px;">
                 <p>Hasil analisis akan muncul di sini</p>
             </div>
             """, unsafe_allow_html=True)
 else:
-    # Tampilan jika model GAGAL dimuat
-    st.warning("Model AI belum siap. Harap periksa error di atas.")
-    st.error("Jika Anda adalah developer, pastikan 'model_bobot_padi_jagung.weights.h5' ada di GitHub.")
+    st.warning("Model AI belum siap.")
+
