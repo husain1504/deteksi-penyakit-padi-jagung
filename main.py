@@ -165,55 +165,87 @@ if model is not None:
             with st.spinner("Sedang Menganalisis..."):
                 idx, conf = import_and_predict(image, model)
                 
-                # --- FILTER KEYAKINAN (THRESHOLD) ---
-                MIN_CONFIDENCE = 0.60 # Diturunkan jadi 60% agar lebih toleran
+                # --- FILTER KEYAKINAN (THRESHOLD BARU) ---
+                # Kita turunkan jadi 40% agar lebih toleran terhadap foto lapangan
+                MIN_CONFIDENCE = 0.40 
                 
-                if idx is not None and conf >= MIN_CONFIDENCE:
+                if idx is not None:
                     res = class_names[idx]
                     info = solusi_petani.get(res)
+                    confidence_percent = conf * 100
                     
-                    # Fallback jika data penyakit belum ada di kamus
-                    if not info:
-                        info = {'nama': res, 'status': 'Terdeteksi', 'style': 'warning', 'icon': '⚠️', 'deskripsi': '-', 'gejala': '-', 'penanganan': '-', 'pencegahan': '-'}
+                    # KATEGORI 1: YAKIN (> 70%) -> Tampil Hijau/Normal
+                    if conf >= 0.70:
+                        css_class = f"status-{info['style']}"
+                        header_icon = info['icon']
+                        header_text = f"{info['nama']}"
+                        alert_type = "success" if info['style'] == 'safe' else "warning"
+                        
+                        st.markdown(f"""
+                        <div class="result-box {css_class}">
+                            <div class="result-title">{header_icon} {header_text}</div>
+                            <p style="margin-top: 10px;">Status: <b>{info['status']}</b></p>
+                            <p style="font-size: 0.8em; opacity: 0.7;">Tingkat Keyakinan: {confidence_percent:.2f}% (Sangat Yakin)</p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                    css_class = f"status-{info['style']}"
-                    
-                    st.markdown(f"""
-                    <div class="result-box {css_class}">
-                        <div class="result-title">{info['icon']} {info['nama']}</div>
-                        <p style="margin-top: 10px;">Status: <b>{info['status']}</b></p>
-                        <p style="font-size: 0.8em; opacity: 0.7;">Tingkat Keyakinan: {conf*100:.2f}%</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
+                    # KATEGORI 2: RAGU-RAGU (40% - 69%) -> Tampil Kuning (Peringatan)
+                    elif conf >= MIN_CONFIDENCE:
+                        st.warning(f"""
+                        ⚠️ **Hasil Analisis (Keyakinan Rendah: {confidence_percent:.0f}%)**
+                        
+                        Sistem mendeteksi kemiripan dengan **{info['nama']}**, namun tidak terlalu yakin karena faktor pencahayaan atau latar belakang foto.
+                        """)
+                        
+                        st.markdown(f"""
+                        <div class="result-box status-warning" style="opacity: 0.8;">
+                            <div class="result-title">? {info['nama']}</div>
+                            <p style="margin-top: 10px;">Status: <b>{info['status']}</b></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # KATEGORI 3: TIDAK TAHU (< 40%) -> Tampil Merah (Tolak)
+                    else:
+                        st.error(f"""
+                        ### ❌ Gambar Tidak Dikenali
+                        **Tingkat Keyakinan: {confidence_percent:.0f}% (Sangat Rendah)**
+                        
+                        Sistem tidak dapat mengenali tanaman ini. Kemungkinan penyebab:
+                        1. Foto terlalu jauh atau buram.
+                        2. Banyak objek lain (tangan, tanah) yang mengganggu.
+                        3. Bukan daun Padi atau Jagung.
+                        
+                        **Saran:** Coba foto lebih dekat pada satu helai daun saja.
+                        """)
+                        # Stop eksekusi (jangan tampilkan tab solusi)
+                        st.stop()
+
+                    # --- BAGIAN TABS SOLUSI (Hanya Muncul jika Kategori 1 atau 2) ---
                     st.progress(float(conf))
                     st.markdown("---")
                     
                     tab1, tab2, tab3 = st.tabs(["📖 Penjelasan", "💊 Solusi & Obat", "🛡️ Pencegahan"])
                     
                     with tab1:
+                        st.markdown("#### Apa itu penyakit ini?")
                         st.info(info.get('deskripsi', '-'))
-                        st.markdown("**Gejala Khas:**")
+                        st.markdown("#### Gejala Khas:")
                         st.markdown(info.get('gejala', '-'))
+                        
                     with tab2:
+                        st.markdown("#### Langkah Pengobatan:")
                         if info['style'] == 'safe':
                             st.success(info.get('penanganan', '-'))
                         else:
                             st.warning(info.get('penanganan', '-'))
+                            st.caption("⚠️ *Catatan: Gunakan pestisida sesuai dosis.*")
+                            
                     with tab3:
+                        st.markdown("#### Cara Mencegah:")
                         st.markdown(info.get('pencegahan', '-'))
                         
-                elif idx is not None and conf < MIN_CONFIDENCE:
-                    st.error(f"""
-                    ### ⚠️ Gambar Tidak Dikenali ({conf*100:.0f}%)
-                    Sistem kurang yakin dengan gambar ini.
-                    **Saran:**
-                    1. Pastikan foto fokus pada **satu lembar daun**.
-                    2. Pastikan pencahayaan cukup.
-                    3. Coba putar posisi foto.
-                    """)
                 else:
-                    st.error("Gagal memproses gambar.")
+                    st.error("Terjadi masalah teknis saat prediksi.")
         else:
             st.markdown("""
             <div class="info-card" style="text-align: center; opacity: 0.5; padding: 40px;">
