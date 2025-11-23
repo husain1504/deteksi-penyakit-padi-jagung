@@ -120,14 +120,22 @@ class_names = [
     'padi_normal'
 ]
 
-# Fungsi prediksi (tetap sama, tidak perlu diubah)
+# Fungsi prediksi (DIPERBAIKI agar tidak error dimensi array)
 def import_and_predict(image_data, model):
+    # 1. Pastikan RGB
+    image_data = image_data.convert('RGB')
+    
+    # 2. Resize
     size = (224, 224)
     image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
+    
+    # 3. Convert to Array & Normalize
     img_array = np.asarray(image)
     normalized_image_array = (img_array.astype(np.float32) / 255.0)
-    data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
-    data[0] = normalized_image_array
+    
+    # 4. Expand Dimensions (Membuat batch: (1, 224, 224, 3))
+    # Ini menggantikan cara manual 'data[0] =' yang sering error
+    data = np.expand_dims(normalized_image_array, axis=0)
     
     try:
         prediction = model.predict(data)
@@ -144,10 +152,10 @@ def import_and_predict(image_data, model):
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3022/3022999.png", width=80)
     st.title("Dokter Tanaman")
-    st.caption("Versi 2.0 - Petani Cerdas") # Saya pertahankan nama Petani Cerdas Anda
+    st.caption("Versi 2.0 - Petani Cerdas")
     st.markdown("---")
     st.info("Aplikasi ini dapat mendeteksi penyakit pada tanaman Padi dan Jagung.")
-    st.markdown("© 2025 Petani Cerdas") # Saya pertahankan nama Petani Cerdas Anda
+    st.markdown("© 2025 Petani Cerdas")
 
 # ==========================================
 # 5. UI UTAMA
@@ -187,7 +195,8 @@ if model is not None:
                 # ==========================================================
                 # --- FITUR FILTER BARU (PENOLAK TANAMAN LAIN) ---
                 # ==========================================================
-                MIN_CONFIDENCE = 0.70 # Ambang batas 70%
+                # Ambang batas keyakinan. Jika di bawah ini, anggap bukan Padi/Jagung
+                MIN_CONFIDENCE = 0.70 
                 
                 if idx is not None and conf >= MIN_CONFIDENCE:
                     # JIKA YAKIN (DI ATAS 70%), TAMPILKAN HASIL
@@ -200,7 +209,7 @@ if model is not None:
                     <div class="result-box {css_class}">
                         <div class="result-title">{info['icon']} {info['nama']}</div>
                         <p style="margin-top: 10px;">Status: <b>{info['status']}</b></p>
-                        <p style="font-size: 0.8em; opacity: 0.7;">Confidence: {conf*100:.2f}%</p>
+                        <p style="font-size: 0.8em; opacity: 0.7;">Tingkat Keyakinan: {conf*100:.2f}%</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -230,13 +239,17 @@ if model is not None:
                 elif idx is not None and conf < MIN_CONFIDENCE:
                     # JIKA TIDAK YAKIN (DI BAWAH 70%), TOLAK GAMBAR
                     st.error(f"""
-                    **Gambar Tidak Dikenali (Keyakinan: {conf*100:.0f}%)**
+                    ### ⚠️ Gambar Tidak Dikenali
                     
-                    Model AI kami tidak dapat mengenali gambar ini sebagai daun Padi atau Jagung.
+                    **Tingkat Keyakinan AI: {conf*100:.0f}% (Terlalu Rendah)**
                     
-                    **Mohon unggah foto yang jelas dan pastikan itu adalah daun Padi atau Jagung.**
+                    Sistem kami mendeteksi bahwa gambar ini kemungkinan besar **bukan daun Padi atau Jagung**, atau kualitas gambarnya kurang jelas.
+                    
+                    **Mohon unggah ulang dengan ketentuan:**
+                    1. Pastikan objek adalah **Daun Padi** atau **Daun Jagung**.
+                    2. Pastikan gambar fokus dan pencahayaan cukup.
+                    3. Hindari latar belakang yang terlalu ramai.
                     """)
-                    st.info("Jika Anda yakin ini adalah Padi/Jagung, coba foto ulang dengan pencahayaan lebih baik.")
                     
                 else:
                     st.error("Terjadi masalah saat melakukan prediksi.")
