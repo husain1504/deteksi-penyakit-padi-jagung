@@ -194,7 +194,7 @@ if model is not None:
                         st.warning(f"""
                         ⚠️ **Hasil Analisis (Keyakinan Rendah: {confidence_percent:.0f}%)**
                         
-                        Sistem mendeteksi kemiripan dengan **{info['nama']}**, namun tidak terlalu yakin karena faktor pencahayaan atau latar belakang foto.
+                        Sistem mendeteksi kemiripan dengan **{info['nama']}**, namun tidak terlalu yakin karena faktor pencahayaan atau latar belakang foto mohon mengabil ulang foto yang lebih jelas.
                         """)
                         
                         st.markdown(f"""
